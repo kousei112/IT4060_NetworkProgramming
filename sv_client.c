@@ -7,16 +7,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-/*
- * sv_client <địa chỉ IP> <cổng>
- *
- * - Kết nối đến sv_server
- * - Nhập thông tin sinh viên: MSSV, họ tên, ngày sinh, điểm TB
- * - Đóng gói thành 1 dòng: "MSSV HoTen NgaySinh DiemTB"
- * - Gửi sang sv_server
- * - Hỏi người dùng có muốn nhập tiếp không
- */
-
 int main(int argc, char *argv[])
 {
     if (argc != 3) {
@@ -31,15 +21,12 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Invalid port: %s\n", argv[2]);
         return 1;
     }
-
-    /* --- Tạo socket TCP --- */
     int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == -1) {
         perror("socket() failed");
         return 1;
     }
 
-    /* --- Khai báo địa chỉ server --- */
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
@@ -51,7 +38,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* --- Kết nối đến server --- */
     printf("Connecting to %s:%d ...\n", ip, port);
     if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) == -1) {
         perror("connect() failed");
@@ -60,12 +46,11 @@ int main(int argc, char *argv[])
     }
     printf("Connected!\n\n");
 
-    /* --- Vòng lặp nhập và gửi thông tin sinh viên --- */
     char choice;
     do {
         char mssv[20];
         char hoten[100];
-        char ngaysinh[20];  /* định dạng YYYY-MM-DD */
+        char ngaysinh[20];  
         float diemtb;
 
         printf("========== NHAP THONG TIN SINH VIEN ==========\n");
@@ -84,21 +69,13 @@ int main(int argc, char *argv[])
 
         printf("Diem TB    : ");
         scanf("%f", &diemtb);
-        while (getchar() != '\n'); /* xóa newline còn lại */
-
-        /*
-         * Đóng gói thành 1 dòng theo định dạng:
-         * "MSSV HoTen NgaySinh DiemTB"
-         * Ví dụ: "20201234 Nguyen Van A 2002-04-10 3.99"
-         */
+        while (getchar() != '\n');
         char packet[256];
         snprintf(packet, sizeof(packet),
                  "%s %s %s %.2f",
                  mssv, hoten, ngaysinh, diemtb);
 
         printf("\nDu lieu se gui: [%s]\n", packet);
-
-        /* --- Gửi đến server --- */
         ssize_t sent = send(sock, packet, strlen(packet), 0);
         if (sent == -1) {
             perror("send() failed");
@@ -106,7 +83,6 @@ int main(int argc, char *argv[])
         }
         printf("Da gui %zd bytes.\n", sent);
 
-        /* --- Nhận phản hồi từ server --- */
         char resp[512];
         ssize_t rlen = recv(sock, resp, sizeof(resp) - 1, 0);
         if (rlen > 0) {
@@ -120,7 +96,6 @@ int main(int argc, char *argv[])
             break;
         }
 
-        /* --- Hỏi tiếp tục không --- */
         printf("\nNhap tiep sinh vien khac? (y/n): ");
         scanf(" %c", &choice);
         while (getchar() != '\n');
@@ -128,7 +103,6 @@ int main(int argc, char *argv[])
 
     } while (choice == 'y' || choice == 'Y');
 
-    /* Gửi tín hiệu kết thúc */
     send(sock, "QUIT", 4, 0);
 
     close(sock);
