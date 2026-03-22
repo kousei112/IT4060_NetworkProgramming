@@ -8,19 +8,6 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 
-/*
- * sv_server <cổng> <file_log>
- *
- * - Lắng nghe kết nối tại <cổng>
- * - Nhận gói tin từ sv_client (định dạng: "MSSV HoTen NgaySinh DiemTB")
- * - In ra màn hình thông tin sinh viên
- * - Ghi vào <file_log> theo định dạng:
- *   <IP> <YYYY-MM-DD> <HH:MM:SS> <MSSV> <HoTen> <NgaySinh> <DiemTB>
- *   Ví dụ: 127.0.0.1 2023-04-10 09:00:00 20201234 Nguyen Van A 2002-04-10 3.99
- * - Gửi phản hồi xác nhận cho client
- */
-
-/* Lấy thời gian hiện tại dạng "YYYY-MM-DD HH:MM:SS" */
 void get_timestamp(char *buf, size_t bufsize)
 {
     time_t now = time(NULL);
@@ -43,7 +30,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* --- Tạo socket TCP --- */
     int listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listener == -1) {
         perror("socket() failed");
@@ -53,7 +39,6 @@ int main(int argc, char *argv[])
     int opt = 1;
     setsockopt(listener, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    /* --- Gắn địa chỉ --- */
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family      = AF_INET;
@@ -78,7 +63,6 @@ int main(int argc, char *argv[])
     printf("  Nhan Ctrl+C de dung.\n");
     printf("==========================================\n\n");
 
-    /* --- Vòng lặp chấp nhận client --- */
     while (1) {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
@@ -93,7 +77,6 @@ int main(int argc, char *argv[])
             continue;
         }
 
-        /* Lấy IP client */
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &client_addr.sin_addr,
                   client_ip, sizeof(client_ip));
@@ -102,7 +85,6 @@ int main(int argc, char *argv[])
         printf("Client ket noi: %s:%d\n",
                client_ip, ntohs(client_addr.sin_port));
 
-        /* --- Vòng lặp nhận gói tin --- */
         char buf[512];
         int  count = 0;
 
@@ -119,7 +101,6 @@ int main(int argc, char *argv[])
 
             buf[received] = '\0';
 
-            /* Kiểm tra tín hiệu kết thúc */
             if (strcmp(buf, "QUIT") == 0) {
                 printf("Nhan lenh QUIT. Ket thuc phien.\n");
                 break;
@@ -127,18 +108,10 @@ int main(int argc, char *argv[])
 
             count++;
 
-            /*
-             * Gói tin có định dạng: "MSSV HoTen NgaySinh DiemTB"
-             * HoTen có thể gồm nhiều từ, nên tách từ cuối (DiemTB)
-             * và từ áp cuối (NgaySinh) trước, phần còn lại là HoTen
-             *
-             * Thuật toán: tách token từ cuối chuỗi
-             */
             char data[512];
             strncpy(data, buf, sizeof(data) - 1);
             data[sizeof(data) - 1] = '\0';
 
-            /* Tách DiemTB - token cuối cùng */
             char *last_space = strrchr(data, ' ');
             if (!last_space) {
                 printf("Goi tin khong hop le: %s\n", buf);
@@ -149,9 +122,8 @@ int main(int argc, char *argv[])
             strncpy(diemtb_str, last_space + 1, sizeof(diemtb_str) - 1);
             diemtb_str[sizeof(diemtb_str) - 1] = '\0';
             float diemtb = atof(diemtb_str);
-            *last_space = '\0';  /* cắt DiemTB ra khỏi data */
+            *last_space = '\0';
 
-            /* Tách NgaySinh - token áp cuối */
             last_space = strrchr(data, ' ');
             if (!last_space) {
                 printf("Goi tin khong hop le: %s\n", buf);
@@ -161,9 +133,8 @@ int main(int argc, char *argv[])
             char ngaysinh[20];
             strncpy(ngaysinh, last_space + 1, sizeof(ngaysinh) - 1);
             ngaysinh[sizeof(ngaysinh) - 1] = '\0';
-            *last_space = '\0';  /* cắt NgaySinh ra khỏi data */
+            *last_space = '\0';  
 
-            /* Tách MSSV - token đầu tiên */
             char *space_after_mssv = strchr(data, ' ');
             if (!space_after_mssv) {
                 printf("Goi tin khong hop le: %s\n", buf);
@@ -176,14 +147,11 @@ int main(int argc, char *argv[])
             strncpy(mssv, data, mssv_len);
             mssv[mssv_len] = '\0';
 
-            /* Phần còn lại là HoTen */
             char *hoten = space_after_mssv + 1;
 
-            /* Lấy timestamp lúc nhận */
             char timestamp[32];
             get_timestamp(timestamp, sizeof(timestamp));
 
-            /* --- In ra màn hình --- */
             printf("\n========== SINH VIEN #%d ==========\n", count);
             printf("  Thoi gian : %s\n", timestamp);
             printf("  IP client : %s\n", client_ip);
@@ -193,17 +161,13 @@ int main(int argc, char *argv[])
             printf("  Diem TB   : %.2f\n", diemtb);
             printf("====================================\n");
 
-            /* --- Ghi vào file log theo định dạng đề bài ---
-             * <IP> <YYYY-MM-DD> <HH:MM:SS> <MSSV> <HoTen> <NgaySinh> <DiemTB>
-             * Ví dụ: 127.0.0.1 2023-04-10 09:00:00 20201234 Nguyen Van A 2002-04-10 3.99
-             */
             FILE *lf = fopen(log_file, "a");
             if (lf == NULL) {
                 perror("Cannot open log file");
             } else {
                 fprintf(lf, "%s %s %s %s %s %.2f\n",
                         client_ip,
-                        timestamp,   /* "YYYY-MM-DD HH:MM:SS" */
+                        timestamp, 
                         mssv,
                         hoten,
                         ngaysinh,
@@ -212,7 +176,6 @@ int main(int argc, char *argv[])
                 printf("Da ghi vao file log: %s\n", log_file);
             }
 
-            /* --- Gửi phản hồi cho client --- */
             char resp[256];
             snprintf(resp, sizeof(resp),
                      "Da nhan SV #%d: [%s] %s - %s - Diem TB: %.2f",
